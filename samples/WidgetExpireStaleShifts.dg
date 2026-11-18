@@ -1,0 +1,47 @@
+// Nightly cleanup: closes shifts still open 2 hours past their scheduled
+// end (or left open from a previous day), ends any open break, and marks
+// the timesheet "No Check-Out" so reports and payroll stay accurate.
+
+map WidgetExpireStaleShifts()
+{
+	nowMs = zoho.currenttime.toLong();
+	today = zoho.currentdate;
+	graceMs = 7200000;
+	count = 0;
+	openShifts = Timesheets[Time_Out == null && Attendance_Status != "No Check-Out"];
+	for each  ts in openShifts
+	{
+		expire = false;
+		schedOut = ts.Scheduled_Time_Out;
+		wDate = ts.Date_field;
+		if(schedOut != null && wDate != null)
+		{
+			cutoff = (wDate.toString("yyyy-MM-dd") + " " + schedOut.toString()).toDateTime("yyyy-MM-dd HH:mm:ss");
+			if(nowMs > cutoff.toLong() + graceMs)
+			{
+				expire = true;
+			}
+		}
+		else if(wDate != null && wDate < today)
+		{
+			expire = true;
+		}
+		if(expire)
+		{
+			for each  timeBreak in ts.Break
+			{
+				br = Breaks[ID == timeBreak];
+				if(br.Break_In != null && br.Break_Out == null)
+				{
+					br.Break_Out=zoho.currenttime;
+					br.Break_Time=thisapp.ConvertTimeToText(br.Break_In.timeBetween(zoho.currenttime));
+				}
+			}
+			ts.Attendance_Status="No Check-Out";
+			count = count + 1;
+		}
+	}
+	response = Map();
+	response.put("expired",count);
+	return response;
+}

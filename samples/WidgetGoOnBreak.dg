@@ -1,0 +1,64 @@
+// Time-clock API: starts a Break or Lunch on the employee's open shift.
+// Rejects invalid types and double breaks, writes a subform row, and
+// returns server timestamps so the widget timer stays in sync.
+
+map WidgetGoOnBreak(string breakType, string note)
+{
+	response = Map();
+	response.put("status","error");
+	// crash-safe default
+	try 
+	{
+		response.put("status","not_working");
+		if(breakType != "Break" && breakType != "Lunch")
+		{
+			response.put("status","invalid_break_type");
+			thisapp.tools.logInfo("WidgetGoOnBreak","invalid_break_type",breakType);
+			return response;
+		}
+		shifts = Timesheets[Employee.Email == zoho.loginuserid && Time_Out == null && Attendance_Status != "No Check-Out"] sort by Time_In desc;
+		for each  ts in shifts
+		{
+			alreadyOnBreak = false;
+			for each  timeBreak in ts.Break
+			{
+				br = Breaks[ID == timeBreak];
+				if(br.Break_In != null && br.Break_Out == null)
+				{
+					alreadyOnBreak = true;
+				}
+			}
+			if(alreadyOnBreak)
+			{
+				response.put("status","already_on_break");
+				thisapp.tools.logInfo("WidgetGoOnBreak","already_on_break",breakType);
+				return response;
+			}
+			nowT = zoho.currenttime;
+			thisRow = Timesheets.Break();
+			thisRow.Employee=ts.Employee;
+			thisRow.Type_field=breakType;
+			thisRow.Date_field=zoho.currentdate;
+			thisRow.Break_In=nowT;
+			thisRow.Notes=note;
+			rowCol = Collection();
+			rowCol.insert(thisRow);
+			ts.Break.insert(rowCol);
+			response.put("status","on_break");
+			response.put("breakType",breakType);
+			response.put("breakInMs",nowT.toLong());
+			response.put("serverNowMs",nowT.toLong());
+			break;
+		}
+		thisapp.tools.logInfo("WidgetGoOnBreak",response.get("status"),breakType);
+		return response;
+	}	catch (e)
+	{
+		errMsg = "" + e;
+		thisapp.tools.logError("WidgetGoOnBreak",errMsg);
+		response.put("status","error");
+		response.put("error",errMsg);
+		return response;
+	}
+	return response;
+}

@@ -1,0 +1,24 @@
+// Structured in-app logging. Writes level, source, status, message and
+// user to an App_Logs form, giving admins an audit trail inside Creator.
+// Logging failures are swallowed so they can never break the caller.
+
+void tools.appLog(string level, string source, string status, string message, string recordId)
+{
+	try 
+	{
+		insert into App_Logs
+		[
+			Level=level
+			Source=source
+			Status=status
+			Message=message
+			User_Email=zoho.loginuserid
+			Record_Id=recordId
+			Logged_At=zoho.currenttime
+			Added_User=zoho.loginuser
+		]
+	}	catch (e)
+	{
+		// swallow errors: logging must never break the caller
+	}
+}

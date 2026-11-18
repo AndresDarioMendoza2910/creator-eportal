@@ -1,0 +1,4 @@
+void tools.logInfo(string source, string status, string message)
+{
+	thisapp.tools.appLog("INFO",source,status,message,"");
+}

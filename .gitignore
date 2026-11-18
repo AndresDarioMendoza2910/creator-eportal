@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Raw, branded exports never belong here
+*.original.ds
+
+# Full source kept locally only (case-study repo)
+private/

@@ -1,0 +1,63 @@
+// Validates and deducts a leave request against the right balance
+// (PTO, sick days or family-responsibility leave). Returns a result map
+// instead of throwing, so the calling workflow can show a clear message.
+
+map PTO.applyLeaveUsage(int employeeId, string leaveType, int requestedDays)
+{
+	res = Map();
+	res.put("success",false);
+	res.put("message","Unknown error");
+	emp = Employees[ID == employeeId];
+	if(emp == null || emp.Status != "Active")
+	{
+		res.put("message","Employee not found or inactive");
+		return res;
+	}
+	// Policy rounding happens here (usage time only)
+	daysToDeduct = requestedDays.round(0);
+	if(daysToDeduct <= 0)
+	{
+		res.put("message","Requested days must be greater than 0");
+		return res;
+	}
+	// Get current balance
+	balance = 0.0;
+	if(leaveType == "Vacation / PTO")
+	{
+		balance = ifnull(emp.PTO_Balance,0);
+	}
+	else if(leaveType == "Sickday")
+	{
+		balance = ifnull(emp.Sickdays_Balance,0);
+	}
+	else if(leaveType == "Family Responsability")
+	{
+		balance = ifnull(emp.FRL_Balance,0);
+	}
+	else
+	{
+		res.put("message","Unsupported leave type: " + leaveType);
+		return res;
+	}
+	if(balance < daysToDeduct)
+	{
+		res.put("message","Insufficient balance. Available: " + balance);
+		return res;
+	}
+	// Deduct (no extra rounding needed)
+	if(leaveType == "Vacation / PTO")
+	{
+		emp.PTO_Balance=balance - daysToDeduct;
+	}
+	else if(leaveType == "Sickday")
+	{
+		emp.Sickdays_Balance=balance - daysToDeduct;
+	}
+	else if(leaveType == "Family Responsability")
+	{
+		emp.FRL_Balance=balance - daysToDeduct;
+	}
+	res.put("success",true);
+	res.put("message","Leave applied: " + daysToDeduct + " days");
+	return res;
+}

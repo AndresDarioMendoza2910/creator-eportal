@@ -1,0 +1,4 @@
+void tools.logError(string source, string message)
+{
+	thisapp.tools.appLog("ERROR",source,"error",message,"");
+}

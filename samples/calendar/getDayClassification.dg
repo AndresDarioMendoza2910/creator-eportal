@@ -1,0 +1,77 @@
+// Decides what a given date means for one employee: weekend/off, holiday,
+// company day off, approved leave, or a real workday where a missing time-in
+// counts as absence. Every daily job (absence marking, leave accrual, reports)
+// calls this so the business-calendar rules live in exactly one place.
+
+map calendar.getDayClassification(int employeeId, date workDate)
+{
+	result = Map();
+	// Defaults
+	result.put("employeeFound",false);
+	result.put("shouldProcess",false);
+	result.put("isWorkday",false);
+	result.put("isHolidayOrOff",false);
+	result.put("isOnApprovedLeave",false);
+	result.put("shouldMarkAbsent",false);
+	result.put("dayClass","Unknown");
+	result.put("reason","No employee");
+	emp = Employees[ID == employeeId];
+	if(emp == null)
+	{
+		return result;
+	}
+	result.put("employeeFound",true);
+	// Only active portal users are processed
+	if(emp.Status != "Active" || emp.Is_Portal_User != true)
+	{
+		result.put("reason","Inactive or non-portal user");
+		return result;
+	}
+	result.put("shouldProcess",true);
+	// -----------------------------
+	// 1) Is this a scheduled workday?
+	weekday = workDate.toString("EEEE");
+	// Monday, Tuesday, Wednesday...
+	isWorkday = false;
+	if(emp.Work_Days != null)
+	{
+		workDaysList = emp.Work_Days.toList();
+		isWorkday = workDaysList.contains(weekday);
+	}
+	result.put("isWorkday",isWorkday);
+	if(!isWorkday)
+	{
+		result.put("dayClass","Weekend/Off");
+		result.put("reason","Not in employee Work_Days");
+		return result;
+	}
+	// -----------------------------
+	// 2) Is it a holiday or company-off day?
+	cal = Workday_Calendar[Date_field == workDate && Location == emp.Location && Is_Active == true];
+	if(cal != null)
+	{
+		if(cal.Day_Type == "Holiday" || cal.Day_Type == "Company Off")
+		{
+			result.put("isHolidayOrOff",true);
+			result.put("dayClass",cal.Day_Type);
+			result.put("reason","Workday_Calendar: " + cal.Day_Type);
+			return result;
+		}
+	}
+	// -----------------------------
+	// 3) Is employee on approved leave?
+	lv = Leave_Requests[Employee.ID == employeeId && Status == "Approved" && Start_Date <= workDate && End_Date >= workDate];
+	if(lv.count() > 0)
+	{
+		result.put("isOnApprovedLeave",true);
+		result.put("dayClass","Leave");
+		result.put("reason","Approved leave");
+		return result;
+	}
+	// -----------------------------
+	// 4) Scheduled workday and no exclusions → absent eligible
+	result.put("shouldMarkAbsent",true);
+	result.put("dayClass","Workday");
+	result.put("reason","Scheduled workday, no time-in");
+	return result;
+}

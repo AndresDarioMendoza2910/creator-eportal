@@ -1,0 +1,90 @@
+// Time-clock API used by a custom JavaScript widget.
+// Blocks double check-ins, geolocates the IP, and compares it against an
+// allow-list of office IPs. On-site users get a timesheet immediately;
+// remote users get a prefilled Remote Attendance form that needs approval.
+// Always returns a status map, with a crash-safe default and error logging.
+
+map WidgetCheckIn()
+{
+	response = Map();
+	response.put("status","error");
+	try 
+	{
+		open = Timesheets[Employee.Email == zoho.loginuserid && Time_Out == null && Attendance_Status != "No Check-Out" && Attendance_Status != "Absent"] sort by Time_In desc;
+		for each  o in open
+		{
+			response.put("status","already_working");
+			thisapp.tools.logInfo("WidgetCheckIn","already_working","");
+			return response;
+		}
+		employee = Employees[Email == zoho.loginuserid];
+		currentDate = zoho.currentdate;
+		currentTime = zoho.currenttime;
+		currentIP = zoho.ipaddress;
+		locationSummary = "";
+		try 
+		{
+			locResponse = invokeurl
+			[
+				url :"https://ip-api.com/xml/" + currentIP
+				type :GET
+			];
+			locXml = locResponse.toString();
+			city = locXml.executeXPath("/query/city/text()");
+			regionName = locXml.executeXPath("/query/regionName/text()");
+			country = locXml.executeXPath("/query/country/text()");
+			locationSummary = city + ", " + regionName + ", " + country;
+		}		catch (ge)
+		{
+			locationSummary = "";
+		}
+		allowedIP = IP_Allowed_List[ip_address == currentIP && is_active == true];
+		onsite = false;
+		if(allowedIP != null && allowedIP.ip_address != null && allowedIP.ip_address != "")
+		{
+			onsite = true;
+		}
+		if(onsite)
+		{
+			decision = thisapp.calendar.getDayClassification(employee.ID,currentDate);
+			insert into Timesheets
+			[
+				Employee=employee.ID
+				Date_field=currentDate
+				Day_Class=decision.get("dayClass")
+				Scheduled_Time_In=employee.Start_Time
+				Scheduled_Time_Out=employee.End_Time
+				Time_In=currentTime
+				Attendance_Status="Checked-In"
+				IP_Address=currentIP
+				Location=locationSummary
+				Added_User=zoho.loginuser
+			]
+			response.put("status","checked_in");
+			response.put("serverNowMs",currentTime.toLong());
+			response.put("ip",currentIP);
+		}
+		else
+		{
+			encIP = encodeUrl(currentIP);
+			encUser = encodeUrl(zoho.loginuserid);
+			encLoc = encodeUrl(locationSummary);
+			encEmployee = encodeUrl(employee.ID);
+			encEmployeeType = encodeUrl(employee.Employee_Type);
+			formURL = "#Form:Remote_Attendance?Added_User=" + encUser + "&IP_Address=" + encIP + "&Timein_Date=" + currentDate + "&Timein_Time=" + currentTime + "&Location=" + encLoc + "&Email_For_Dev_Do_Not_Touch=" + encUser + "&Employee=" + encEmployee + "&EmployeeType=" + encEmployeeType;
+			response.put("status","remote_required");
+			response.put("formUrl",formURL);
+			response.put("ip",currentIP);
+		}
+		thisapp.tools.logInfo("WidgetCheckIn",response.get("status"),currentIP);
+		return response;
+	}	catch (e)
+	{
+		errMsg = "" + e;
+		thisapp.tools.logError("WidgetCheckIn",errMsg);
+		response.put("status","error");
+		response.put("error",errMsg);
+		return response;
+	}
+	return response;
+}
